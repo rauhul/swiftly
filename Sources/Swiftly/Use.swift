@@ -14,6 +14,9 @@ struct Use: SwiftlyCommand {
     @Flag(name: .shortAndLong, help: "Set the global default toolchain that is used when there are no .swift-version files.")
     var globalDefault: Bool = false
 
+    @Flag(name: .shortAndLong, help: .init("Output for zsh", visibility: .private))
+    var zsh: Bool = false
+
     @OptionGroup var root: GlobalOptions
 
     @Argument(help: ArgumentHelp(
@@ -60,10 +63,52 @@ struct Use: SwiftlyCommand {
     }
 
     mutating func run(_ ctx: SwiftlyCoreContext) async throws {
-        let versionUpdateReminder = try await validateSwiftly(ctx)
-        defer {
-            versionUpdateReminder()
+        if self.zsh {
+            guard try await self.isLinked(ctx) else {
+                await ctx.print("system")
+                return
+            } 
+
+            var config = try await Config.load(ctx)
+            let (toolchain, _) = try await selectToolchain(
+                ctx,
+                config: &config,
+                globalDefault: self.globalDefault)
+            guard let toolchain else {
+                await ctx.print("system")
+                return
+            }
+
+            var version = ""
+            switch toolchain {
+            case .stable(let value):
+                version += "\(value.major).\(value.minor)"
+                if value.patch != 0 {
+                    version += ".\(value.patch)"
+                }
+            case .snapshot(let value):
+                switch value.branch {
+                case .main:
+                    version += "main"
+                case .release(let major, let minor):
+                    version += "\(major).\(minor)"
+                }
+                let comps = value.date.split(separator: "-")
+                if comps.count == 3 {
+                    let year = comps[0].dropFirst(2)
+                    let month = comps[1].drop { $0 == "0" }
+                    let day = comps[2].drop { $0 == "0" }
+                    version += " \(month)/\(day)/\(year)"
+                } else {
+                    version += " \(value.date)"
+                }
+            }
+            await ctx.print(version)
+            return
         }
+
+        let versionUpdateReminder = try await validateSwiftly(ctx)
+        defer { versionUpdateReminder() }
 
         var config = try await Config.load(ctx)
 

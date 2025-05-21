@@ -75,7 +75,7 @@ extension SwiftlyCommand {
         }
     }
 
-    private func isLinked(_ ctx: SwiftlyCoreContext) async throws -> Bool {
+    func isLinked(_ ctx: SwiftlyCoreContext) async throws -> Bool {
         guard let proxyTo = try? await Swiftly.currentPlatform.findSwiftlyBin(ctx) else {
             return false
         }
